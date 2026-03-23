@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  db:
+    image: neo4j:2026.02.2-community
+    container_name: vulgpt_neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474" # HTTP Browser (Can be removed in strict production)
+      - "7687:7687" # Bolt Routing
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+    volumes:
+      - neo4j_data:/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: vulgpt_redis
+    ports:
+      - "6379:6379"
+
+  llm_service:
+    image: ollama/ollama:latest
+    container_name: vulgpt_llm
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment the below block if you have a local NVIDIA GPU configured for Docker
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: vulgpt_django
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+      - static_volume:/app/staticfiles
+    environment:
+      - DJANGO_SETTINGS_MODULE=vulgpt.settings.local
+    ports:
+      - 127.0.0.1:8000:8000
+    stdin_open: true
+    tty: true
+
+  celery_worker:
+    build: 
+      context: ./backend
+      target: dev
+    container_name: vulgpt_worker
+    command: celery -A vulgpt worker --loglevel=info -E
+    volumes:
+      - ./backend:/app
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN} # Crucial for API limits
+      - NEO4J_URI=bolt://db:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+      - llm_service
+
+  celery_beat:
+    build: 
+      context: ./backend
+      target: dev
+    container_name: vulgpt_beat
+    command: celery -A vulgpt beat -l info
+    volumes:
+      - ./backend:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+
+  flower:
+    image: mher/flower
+    container_name: vulgpt_flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: vulgpt_react
+    ports:
+      - 127.0.0.1:5173:5173
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  neo4j_data:
+  ollama_data:
+  static_volume:
+  frontend_node_modules:
