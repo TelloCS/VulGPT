@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY --chown=node:node package*.json .
 
-RUN npm install
+RUN npm ci
 
 COPY --chown=node:node . .
 
@@ -22,7 +22,9 @@ CMD ["npm", "run", "dev", "--", "--host"]
 #######################################################################
 FROM node AS builder
 
-COPY --chown=node:node . .
+RUN chown -R node:node /app
+
+USER node
 
 RUN npm run build
 

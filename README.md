@@ -41,4 +41,6 @@ docker-compose exec llm_service ollama pull qwen2.5-coder
 Once the environment is live, users can submit standard software manifests (e.g., requirements.txt or package.json) to initiate an automated dependency audit. The system performs a multi-stage analysis to categorize security threats into three tiers: Critical Exploits, Moderate Risks, and Low Priority. For every identified vulnerability, the dashboard provides a mathematically optimized "Safe Version" upgrade path to ensure immediate remediation with minimal breaking changes.
 
 ## Credits and references
-https://osv.dev/
+* **[Nginx Server Configs (H5BP)](https://github.com/h5bp/server-configs-nginx):** Provides the foundational Nginx security headers and performance optimizations.
+* **[OSV.dev (Open Source Vulnerabilities)](https://osv.dev/):** Used as the primary data source for fetching and verifying distributed vulnerability records.
+* **[Google OR-Tools](https://developers.google.com/optimization):** Powers the mathematical constraint solver within the dependency scanning engine.
